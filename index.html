@@ -1,0 +1,124 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Data Lookup & WhatsApp Sender</title>
+  <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+  <script src="https://apis.google.com/js/api.js"></script>
+</head>
+<body class="bg-gradient-to-br from-blue-100 via-blue-200 to-blue-300 min-h-screen flex items-center justify-center">
+  <div class="bg-white p-8 rounded-2xl shadow-2xl w-full max-w-md">
+    <h2 class="text-2xl font-bold mb-6 text-center text-blue-900">Cari Data & Kirim WhatsApp</h2>
+    <form id="lookupForm" class="space-y-4">
+      <input type="text" id="phoneNumber" placeholder="Masukkan Nomor Handphone" class="w-full p-3 border rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500">
+      <div id="resultData" class="text-gray-700 text-sm space-y-2"></div>
+      <div class="flex justify-between mt-6">
+        <button type="button" onclick="resetForm()" class="bg-yellow-400 hover:bg-yellow-500 text-white font-bold py-2 px-4 rounded-xl">Reset</button>
+        <button type="button" onclick="sendWhatsApp()" class="bg-green-500 hover:bg-green-600 text-white font-bold py-2 px-4 rounded-xl">Kirim Data</button>
+      </div>
+    </form>
+  </div>
+
+  <script>
+    const SHEET_ID = '1ho_6D-_uXAK9vwoh3JvO6surURibP0KuFMPrgeLKlsI';
+    const API_KEY = 'AIzaSyBR4lvc0YSZr-M77ST9Lz_9MbT-IwR7dq4'; // <- Ganti dengan API Key kamu
+    const SHEET_NAME = 'Data';
+
+    function loadClient() {
+      gapi.client.init({
+        apiKey: API_KEY
+      }).then(() => {
+        console.log('GAPI client loaded.');
+      }, (error) => {
+        console.error('GAPI client failed to load.', error);
+      });
+    }
+
+    gapi.load('client', loadClient);
+
+    function validatePhone(phone) {
+      return /^\d{10,15}$/.test(phone);
+    }
+
+    async function fetchData(phone) {
+      try {
+        const response = await gapi.client.request({
+          path: `https://sheets.googleapis.com/v4/spreadsheets/${SHEET_ID}/values/${SHEET_NAME}`
+        });
+        const rows = response.result.values;
+        if (!rows || rows.length === 0) {
+          return null;
+        }
+        const headers = rows[0];
+        const found = rows.slice(1).find(row => row[1] === phone);
+
+        if (found) {
+          const data = {};
+          headers.forEach((header, index) => {
+            data[header] = found[index] || '';
+          });
+          return data;
+        } else {
+          return null;
+        }
+      } catch (error) {
+        console.error('Error fetching data', error);
+        return null;
+      }
+    }
+
+    document.getElementById('phoneNumber').addEventListener('keyup', async (e) => {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        await lookupData();
+      }
+    });
+
+    async function lookupData() {
+      const phone = document.getElementById('phoneNumber').value.trim();
+      const resultDiv = document.getElementById('resultData');
+
+      if (!validatePhone(phone)) {
+        resultDiv.innerHTML = '<p class="text-red-500">Nomor handphone tidak valid (10-15 digit angka)</p>';
+        return;
+      }
+
+      resultDiv.innerHTML = '<p class="text-blue-500 animate-pulse">Mencari data...</p>';
+
+      const data = await fetchData(phone);
+
+      if (data) {
+        resultDiv.innerHTML = Object.entries(data).map(([key, value]) => `<div><strong>${key}</strong>: ${value}</div>`).join('');
+      } else {
+        resultDiv.innerHTML = '<p class="text-red-500">Data tidak ditemukan untuk nomor tersebut.</p>';
+      }
+    }
+
+    function resetForm() {
+      document.getElementById('phoneNumber').value = '';
+      document.getElementById('resultData').innerHTML = '';
+    }
+
+    function sendWhatsApp() {
+      const phone = document.getElementById('phoneNumber').value.trim();
+      const resultDiv = document.getElementById('resultData');
+      const text = resultDiv.innerText.replace(/\n/g, '%0A');
+
+      if (!validatePhone(phone)) {
+        alert('Nomor handphone tidak valid!');
+        return;
+      }
+
+      if (!text) {
+        alert('Data belum ditemukan, tidak bisa mengirim.');
+        return;
+      }
+
+      const phoneFormatted = phone.startsWith('62') ? phone : '62' + phone.substring(1);
+      const whatsappUrl = `https://wa.me/${phoneFormatted}?text=${encodeURIComponent(text)}`;
+      window.open(whatsappUrl, '_blank');
+    }
+  </script>
+</body>
+</html>
